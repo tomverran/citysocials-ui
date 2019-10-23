@@ -72,3 +72,21 @@ Resources:
         AliasTarget:
           DNSName: !GetAtt CitySocialsCloudfront.DomainName
           HostedZoneId: Z2FDTNDATAQYW2 # magic cloudfront string
+
+  TravisUser: 
+    Type: AWS::IAM::User
+    Properties:
+      Policies:
+      - PolicyName: allow-s3
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:get*
+            - s3:list*
+            - s3:put*
+            Resource:
+            - !GetAtt FrontendS3Bucket.Arn
+            - !Sub "${FrontendS3Bucket.Arn}/*"
+
