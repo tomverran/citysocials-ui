@@ -1,0 +1,74 @@
+Parameters:
+  ApiUpstreamUrl: {Type: String}
+  AcmCertificateArn: {Type: String}
+
+Resources:
+  CitySocialsZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+        Name: citysocials.app.
+
+  FrontendS3Bucket:   
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        IndexDocument: index.html
+    
+  CitySocialsCloudfront:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        DefaultRootObject: index.html
+        Enabled: true
+        Aliases:
+        - citysocials.app
+        Origins:
+        - Id: frontend-s3
+          DomainName: !Sub "${FrontendS3Bucket}.s3-website-${AWS::Region}.${AWS::URLSuffix}"
+          CustomOriginConfig:
+            OriginProtocolPolicy: http-only
+        - Id: backend
+          DomainName: !Ref ApiUpstreamUrl
+          CustomOriginConfig:
+            OriginProtocolPolicy: https-only
+        ViewerCertificate:
+          AcmCertificateArn: !Ref AcmCertificateArn
+          SslSupportMethod: sni-only # vip is $600 / month!
+        CacheBehaviors:
+        - TargetOriginId: backend
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET,HEAD]
+          PathPattern: /twitter/*
+          ForwardedValues:
+            Cookies: 
+              Forward: whitelist
+              WhitelistedNames: [id]
+            QueryString: true
+            QueryStringCacheKeys: [oauth_token,oauth_verifier]
+        - TargetOriginId: backend
+          ViewerProtocolPolicy: https-only
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          PathPattern: /api/*
+          ForwardedValues:
+            Cookies: 
+              Forward: whitelist
+              WhitelistedNames: [id]
+            QueryString: false
+        DefaultCacheBehavior:
+          TargetOriginId: frontend-s3
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          ForwardedValues:       
+            QueryString: true
+
+  CitySocialsRecordSet:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId: !Ref CitySocialsZone
+      RecordSets:
+      - Name: citysocials.app.
+        Type: A
+        AliasTarget:
+          DNSName: !GetAtt CitySocialsCloudfront.DomainName
+          HostedZoneId: Z2FDTNDATAQYW2 # magic cloudfront string
